@@ -1,0 +1,124 @@
+---
+title: "PA1_template.Rmd"
+output: html_document
+---
+
+Loading and preprocessin the data
+
+```{r}
+library(plyr)
+library(dplyr)
+library(datasets)
+library(data.table)
+library(curl)
+library(ggplot2)
+library(lattice)
+
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile="Activity.zip", method="curl")
+unzipped <- unzip("Activity.zip")
+Activity <- read.table(unzipped, header=TRUE, sep=",", na.strings="NA")
+Date <- strptime(Activity$date, format="%Y-%m-%d")
+Activity <- cbind(Activity, Date)
+
+```
+
+What is mean total number of steps taken per day?
+```{r}
+Activity_Date <- group_by(Activity, Date)
+Activity_Date_Step <- summarize(Activity_Date, sum=sum(steps, na.rm=TRUE))
+Activity_Date_Step$sum <- as.numeric(Activity_Date_Step$sum)
+hist(Activity_Date_Step$sum, main="Total Number of Steps Taken Everyday", xlab="Steps", breaks=7)
+abline(v=mean(Activity_Date_Step$sum), lty=1, col="red")
+text(mean(Activity_Date_Step$sum),25, labels="mean", col="red", pos=2)
+abline(v=median(Activity_Date_Step$sum), lty=2, col="green")
+text(median(Activity_Date_Step$sum),23, labels="median", col="green", pos=4)
+```
+What is the average daily activity pattern?
+```{r}
+Activity_interval <- group_by(Activity, interval)
+Acvitity_interval_step <- summarize(Activity_interval, average=mean(steps, na.rm=TRUE))
+plot(Acvitity_interval_step$average, type="l", xlab="5-min interval", ylab="Average Steps", main="Average Daily Activity Pattern")
+abline(v=which.max(Acvitity_interval_step$average), lty=2)
+text(which.max(Acvitity_interval_step$average), max(Acvitity_interval_step$average), labels="max", pos=4)
+round(max(Acvitity_interval_step$average))
+which.max(Acvitity_interval_step$average)
+
+```
+
+Imputing missing values
+
+```{r}
+missing <- sum(is.na(Activity))
+paste("missing cases:", missing)
+
+complete <- sum(!is.na(Activity))
+paste("complete cases:", complete)
+
+## Imputting NA missing value with average interval step
+Activity$average <- Acvitity_interval_step$average[match(Activity$interval, Acvitity_interval_step$interval)]
+Activity <-mutate(Activity, steps=replace(Activity$steps, is.na(Activity$steps), Activity$average))
+
+Activity_grp <- group_by(Activity, Date)
+Activity_grp_Step <- summarize(Activity_grp, sum=sum(steps, na.rm=TRUE))
+Activity_grp_Step$sum <- as.numeric(Activity_grp_Step$sum)
+hist(Activity_grp_Step$sum, main="Total Number of Steps Taken Everyday", xlab="Steps", breaks=7)
+abline(v=mean(Activity_grp_Step$sum), lty=1, col="red")
+text(mean(Activity_grp_Step$sum),25, labels="mean", col="red", pos=2)
+abline(v=median(Activity_grp_Step$sum), lty=2, col="green")
+text(median(Activity_grp_Step$sum),23, labels="median", col="green", pos=4)
+
+```
+What is the impact of imputting data"
+```{r}
+par(mfrow=c(1,2))
+
+## Histogram without imputting
+Activity <- read.table(unzipped, header=TRUE, sep=",", na.strings="NA")
+Date <- strptime(Activity$date, format="%Y-%m-%d")
+Activity <- cbind(Activity, Date)
+Activity_Date <- group_by(Activity, Date)
+Activity_Date_Step <- summarize(Activity_Date, sum=sum(steps, na.rm=TRUE))
+Activity_Date_Step$sum <- as.numeric(Activity_Date_Step$sum)
+hist(Activity_Date_Step$sum, main="Without Imputting", xlab="Steps", breaks=7)
+abline(v=mean(Activity_Date_Step$sum), lty=1, col="red")
+text(mean(Activity_Date_Step$sum),25, labels="mean", col="red", pos=2)
+abline(v=median(Activity_Date_Step$sum), lty=2, col="green")
+text(median(Activity_Date_Step$sum),23, labels="median", col="green", pos=4)
+
+## Histogram with imputting
+
+Activity$average <- Acvitity_interval_step$average[match(Activity$interval, Acvitity_interval_step$interval)]
+Activity <-mutate(Activity, steps=replace(Activity$steps, is.na(Activity$steps), Activity$average))
+
+Activity_grp <- group_by(Activity, Date)
+Activity_grp_Step <- summarize(Activity_grp, sum=sum(steps, na.rm=TRUE))
+Activity_grp_Step$sum <- as.numeric(Activity_grp_Step$sum)
+hist(Activity_grp_Step$sum, main="With Imputting", xlab="Steps", breaks=7)
+abline(v=mean(Activity_grp_Step$sum), lty=1, col="red")
+text(mean(Activity_grp_Step$sum),25, labels="mean", col="red", pos=2)
+abline(v=median(Activity_grp_Step$sum), lty=2, col="green")
+text(median(Activity_grp_Step$sum),23, labels="median", col="green", pos=4)
+```
+
+Are there differences in activity patterns between weekdays and weekends?
+```{r}
+## Add a column (days) for weekdays and weekends
+Activity$days <- weekdays(Activity$Date)
+for (i in 1:nrow(Activity)){
+  if (Activity[i,]$days %in% c("Saturday", "Sunday")) {
+    Activity[i,]$days <-"weekend"
+  }
+  else {
+    Activity[i,]$days <-"weekday"
+  }
+}
+
+## Calculate average steps for days, interval and Date
+Activity$days <- as.factor(Activity$days)
+Activity_days <- group_by(Activity, days, interval, Date)
+Activity_days_step <- summarise(Activity_days, average=mean(steps))
+
+xyplot(average~interval|days, data=Activity_days_step, type="l", main="Activity Pattern")
+
+
+```
